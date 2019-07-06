@@ -1,0 +1,229 @@
+[
+    {
+        "id": "9eb94400.74fc18",
+        "type": "tab",
+        "label": "Sky crawler"
+    },
+    {
+        "id": "6ba8655e.0b58bc",
+        "type": "http request",
+        "z": "9eb94400.74fc18",
+        "name": "Get dump1090 data",
+        "method": "GET",
+        "ret": "txt",
+        "url": "http://192.168.0.7:8080/data.json",
+        "tls": "",
+        "x": 220,
+        "y": 300,
+        "wires": [
+            [
+                "dfff0afe.57b3a8"
+            ]
+        ]
+    },
+    {
+        "id": "9e957e67.fa73f",
+        "type": "inject",
+        "z": "9eb94400.74fc18",
+        "name": "Trigger for every 0.5 s",
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "repeat": "0.5",
+        "crontab": "",
+        "once": false,
+        "x": 180,
+        "y": 240,
+        "wires": [
+            [
+                "6ba8655e.0b58bc"
+            ]
+        ]
+    },
+    {
+        "id": "dfff0afe.57b3a8",
+        "type": "json",
+        "z": "9eb94400.74fc18",
+        "name": "Convert to JSON",
+        "x": 450,
+        "y": 300,
+        "wires": [
+            [
+                "727f8d97.aae2b4"
+            ]
+        ]
+    },
+    {
+        "id": "727f8d97.aae2b4",
+        "type": "function",
+        "z": "9eb94400.74fc18",
+        "name": "Filter and enrich flights",
+        "func": "// Get current location and elevation from global variables\nvar homeLat = flow.get(\"settings.homeLat\");\nvar homeLon = flow.get(\"settings.homeLon\");\nvar homeElevation = flow.get(\"settings.homeElevation\");\n\n// Get distance between two locations in kilometers\n// Original author: Chuck, https://stackoverflow.com/questions/27928/calculate-distance-between-two-latitude-longitude-points-haversine-formula\nfunction getDistanceFromLatLonInKm(lat1,lon1,lat2,lon2,round) {\n  var R = 6371; // Radius of the earth in km\n  var dLat = deg2rad(lat2-lat1);\n  var dLon = deg2rad(lon2-lon1); \n  var a = \n    Math.sin(dLat/2) * Math.sin(dLat/2) +\n    Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * \n    Math.sin(dLon/2) * Math.sin(dLon/2)\n    ; \n  var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); \n  var d = R * c; // Distance in km\n  \n  if(round) {\n    d = Math.round(d);\n  }\n  \n  return d;\n}\n\nfunction deg2rad(deg) {\n  return deg * (Math.PI/180)\n}\n\nfunction radians(n) {\n  return n * (Math.PI / 180);\n}\nfunction degrees(n) {\n  return n * (180 / Math.PI);\n}\n\n// Get bearing between two locations\n// Original author: d3mac123, https://github.com/NativeScript/nativescript-geolocation/issues/58\nfunction getBearing(startLat,startLong,endLat,endLong){\n  startLat = radians(startLat);\n  startLong = radians(startLong);\n  endLat = radians(endLat);\n  endLong = radians(endLong);\n\n  var dLong = endLong - startLong;\n\n  var dPhi = Math.log(Math.tan(endLat/2.0+Math.PI/4.0)/Math.tan(startLat/2.0+Math.PI/4.0));\n  if (Math.abs(dLong) > Math.PI){\n    if (dLong > 0.0)\n       dLong = -(2.0 * Math.PI - dLong);\n    else\n       dLong = (2.0 * Math.PI + dLong);\n  }\n\n  return (degrees(Math.atan2(dLong, dPhi)) + 360.0) % 360.0;\n}\n\n// Get angle between two elevations and a distance (= between the airplane and the observer)\nfunction getAngle(startElevationFt, targetDistanceKm, targetAltitudeFt){\n    var targetDistanceFt = targetDistanceKm * 3280.8399;\n    var targetAngleRad = Math.atan((targetAltitudeFt - startElevationFt) / targetDistanceFt);\n    \n    return targetAngleRad * 180 / Math.PI;\n}\n\n// Init variable for storing flights\nvar flights = [];\n\n// Calculate distance, bearing and angle from current position for every flight with GPS coordinates\nmsg.payload.forEach(function(flight) {\n    if(flight.validposition !== 0 && flight.seen === 0) {\n        flight.distance = getDistanceFromLatLonInKm(homeLat,homeLon,flight.lat,flight.lon,0);\n        flight.bearing = getBearing(homeLat,homeLon,flight.lat,flight.lon);\n        flight.angle = getAngle(homeElevation,flight.distance,flight.altitude);\n        flight.timestamp = Date.now();\n    \n        flights.push(flight);\n    }\n});\n\nmsg.payload = flights;\n\n// Send a message further down the flow only when there is at least one flight\nif(flights.length > 0) { return [msg]; }\nelse { return [null]; }",
+        "outputs": "1",
+        "noerr": 0,
+        "x": 280,
+        "y": 380,
+        "wires": [
+            [
+                "ce6667be.399b08"
+            ]
+        ]
+    },
+    {
+        "id": "7b2974a8.622e8c",
+        "type": "change",
+        "z": "9eb94400.74fc18",
+        "name": "Set home location, timeout time & init flow variables",
+        "rules": [
+            {
+                "t": "set",
+                "p": "settings.homeLat",
+                "pt": "flow",
+                "to": "50.000000",
+                "tot": "num"
+            },
+            {
+                "t": "set",
+                "p": "settings.homeLon",
+                "pt": "flow",
+                "to": "14.000000",
+                "tot": "num"
+            },
+            {
+                "t": "set",
+                "p": "settings.homeElevation",
+                "pt": "flow",
+                "to": "10000",
+                "tot": "num"
+            },
+            {
+                "t": "set",
+                "p": "settings.visibilityTimeout",
+                "pt": "flow",
+                "to": "10000",
+                "tot": "num"
+            },
+            {
+                "t": "set",
+                "p": "flights",
+                "pt": "flow",
+                "to": "[]",
+                "tot": "json"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 530,
+        "y": 100,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "46c1c977.e84a58",
+        "type": "inject",
+        "z": "9eb94400.74fc18",
+        "name": "Setup configuration",
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "repeat": "",
+        "crontab": "",
+        "once": true,
+        "x": 180,
+        "y": 100,
+        "wires": [
+            [
+                "7b2974a8.622e8c"
+            ]
+        ]
+    },
+    {
+        "id": "ce6667be.399b08",
+        "type": "function",
+        "z": "9eb94400.74fc18",
+        "name": "Store all flights into memory",
+        "func": "// Init variables, getting flights that we've seen previously and loading global variables\nvar newFlights = [];\nvar knownFlights = flow.get(\"flights\");\nvar visibilityTimeout = flow.get(\"settings.visibilityTimeout\");\n\n\n// Get object in an array by key\n// Original author: Rafael Mariano de Oliveira, https://www.linkedin.com/pulse/javascript-find-object-array-based-objects-property-rafael/\nfunction findObjectByKey(array, key, value) {\n    for (var i = 0; i < array.length; i++) {\n        if (array[i][key] === value) {\n            return array[i];\n        }\n    }\n    return null;\n}\n\n\n// For all new flights\nmsg.payload.forEach(function(flightRecord) {\n    var flightNumber = flightRecord.flight.trim();\n    \n    // If its flight number isn't blank\n    if(flightNumber) {\n        // Check if we know the flight already\n        var knownFlightRecord = findObjectByKey(knownFlights, 'flight', flightNumber);\n        \n        // Yes we know, delete the old record, so we achieve updating it eventually\n        if(knownFlightRecord) {\n            for (var i = knownFlights.length - 1; i >= 0; --i) {\n                if (knownFlights[i].flight == flightNumber) {\n                    knownFlights.splice(i,1);\n                }\n            }\n        } \n\n        // Let's add the new information\n        knownFlights.push({flight: flightNumber, distance: flightRecord.distance, time: flightRecord.timestamp, bearing: flightRecord.bearing, angle: flightRecord.angle});\n\n\n    }\n});\n\n\n// Garbage collector, delete flights that we haven't heard of in X seconds\nknownFlights.forEach(function(flightRecord) {\n        if((Date.now() - flightRecord.time) > visibilityTimeout) {\n            for (var i = knownFlights.length - 1; i >= 0; --i) {\n                if (knownFlights[i].flight == flightRecord.flight) {\n                    knownFlights.splice(i,1);\n                }\n            }\n        } \n});\n\n\n// Order by distance from current position\nknownFlights.sort(function(a, b) {\n    return parseFloat(a.distance) - parseFloat(b.distance);\n});\n\n\n// Saving the updated dataset with flights\nflow.set(\"flights\", knownFlights);\n\n\nmsg.payload = knownFlights;\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "x": 540,
+        "y": 380,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "d98ea256.aec01",
+        "type": "http in",
+        "z": "9eb94400.74fc18",
+        "name": "HTTP request",
+        "url": "/get-closest-plane",
+        "method": "get",
+        "swaggerDoc": "",
+        "x": 110,
+        "y": 520,
+        "wires": [
+            [
+                "cd1fcf48.429b7"
+            ]
+        ]
+    },
+    {
+        "id": "627fd087.b00bd",
+        "type": "http response",
+        "z": "9eb94400.74fc18",
+        "name": "",
+        "x": 650,
+        "y": 520,
+        "wires": []
+    },
+    {
+        "id": "cd1fcf48.429b7",
+        "type": "function",
+        "z": "9eb94400.74fc18",
+        "name": "Get nearest plane for web",
+        "func": "// Load list of flights that we know of\nvar planeList = flow.get(\"flights\");\n\n\n// Putting together API response\nif(planeList.length > 0) {\n    var nearestPlane = planeList[0];\n\n    // Get attributes relevant for API\n    msg.payload = \n        {\n            flight: nearestPlane.flight,\n            distance: nearestPlane.distance,\n            bearing: nearestPlane.bearing\n        };\n}\nelse {\n    msg.payload = \n        {\n            flight: \"N/A\",\n            distance: 0,\n            bearing: 720\n        };\n} \n\nreturn msg;",
+        "outputs": "1",
+        "noerr": 0,
+        "x": 370,
+        "y": 520,
+        "wires": [
+            [
+                "627fd087.b00bd"
+            ]
+        ]
+    },
+    {
+        "id": "5fb8c6da.682a58",
+        "type": "comment",
+        "z": "9eb94400.74fc18",
+        "name": "RESTful API",
+        "info": "",
+        "x": 90,
+        "y": 480,
+        "wires": []
+    },
+    {
+        "id": "a743a5ac.d9a108",
+        "type": "comment",
+        "z": "9eb94400.74fc18",
+        "name": "Configuration",
+        "info": "",
+        "x": 90,
+        "y": 60,
+        "wires": []
+    },
+    {
+        "id": "716aae52.6002b",
+        "type": "comment",
+        "z": "9eb94400.74fc18",
+        "name": "Data ingestion & storage",
+        "info": "",
+        "x": 130,
+        "y": 200,
+        "wires": []
+    }
+]
